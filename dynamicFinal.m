@@ -15,29 +15,28 @@ dt = .25;               % Duration of timesteps (h)
 time = 15*(1:T)/60;     % Time vector for graphing purposes
 
 % Set Size
-B = 10;                 % Number of busses
-numChargers = 3;            % number of chargers
+B = 10;                 % Number of busses   % update for warehouse
+numChargers = 5;            % number of chargers   % update for warehouse
 
-% Bus Params
-% eB_endPercent = .66;    % Percent of maximum charge at start and finish (kWh)
-eB_max = 675;           % Maximum energy of busses (kWh)
-eB_min = 135;           % Minimum energy of busses (kWh)
+% Bus Params 
+eB_max = 68;           % Maximum energy of busses (kWh) 
+eB_min = 13.6;           % Minimum energy of busses (kWh) 
 
 % Charger Params
-pCB = 75;
-pCB_min = 75;
+pCB_min = 50; % update for warehouse
+pCB = 50; 
 eff_CB = .94;           % Efficiency of charging busses
 
-% Main Storage Parameters
-eM_max = 1000;          % Maximum energy of main storage (kWh)
-eM_min = 200;           % Minimum energy of main storage (kWh)
+% Main Storage Parameter   % update for warehouse
+eM_max = 500;          % Maximum energy of main storage (kWh)
+eM_min = 100;           % Minimum energy of main storage (kWh)
 
 pCM_max = 500;          % Maximum main storage charging power (kW)
 pDM_max = 500;          % Maximum main storage discharging power (kW)
-eff_CM = .90;           % Efficiency of charging main storage
-eff_DM = .90;           % Efficiency of dischargin main storage
+eff_CM = .95;           % Efficiency of charging main storage
+eff_DM = .95;           % Efficiency of dischargin main storage
 
-routes = [2, 9, 25, 98, 102, 134, 210, 6, 212, 69];
+routes = [1:20];
 
 R = size(routes, 2);
 
@@ -77,13 +76,13 @@ mornings = ["sunny","sunny","sunny","sunny","sunny","sunny","sunny"];
 noons = ["sunny","sunny","sunny","sunny","sunny","sunny","sunny"];
 nights = ["sunny","sunny","sunny","sunny","sunny","sunny","sunny"];
 
-solarPowAvail = 250*initSolarPowModel(season, D, mornings, noons, nights);
+solarPowAvail = 50*initSolarPowModel(season, D, mornings, noons, nights);   % update for warehouse
 
 % Generate Grid Availability Profile
-gridPowAvail = 500*initGridAvailability('gridAvailData.xlsx', D);
+gridPowAvail = 100*initGridAvailability('gridAvailData.xlsx', D);   % update for warehouse
 
 % Generate Grid Pricing Profile
-gridPowPrice = initGridPricingModel(D);
+gridPowPrice = initGridPricingModel(D);  % change tou pricing in this file
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Mathematical Model %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -112,8 +111,9 @@ chargerUse = binvar(B,T);
 
 
 % Route Coverage
-assignment = binvar(B, D, R);
-
+% assignment = binvar(B, D, R);
+generated = load("assignments.mat");
+assignment = generated.assignment;
 busLevel = 0.66;
 reserveLevel = 1;
 
@@ -123,8 +123,15 @@ T2 = binvar(B,T);
 Change = binvar(B,T);
 charging = binvar(B,D);
 
-C = [C, Change == T1 + T2];
 
+%%%%%%%%%%
+% Constraints
+%%%%%%%%%%
+
+
+%%% Charging Constraints
+
+C = [C, Change == T1 + T2];
 
 for t = 1:T
     for b = 1:B
@@ -147,16 +154,24 @@ end
 for b = 1:B
     for d = 1:D
         C = [C, sum(Change(b, tDay(d, 1):tDay(d,96)), 'all') <= 2];
-        C = [C, sum(chargerUse(b, tDay(d, 1):tDay(d,96)), 'all') >= 6*charging(b,d)];
+        C = [C, sum(chargerUse(b, tDay(d, 1):tDay(d,96)), 'all') >= 2*charging(b,d)];   % minimum time to charge
         C = [C, sum(chargerUse(b, tDay(d, 1):tDay(d,96)), 'all') <= 96*charging(b,d)];
     end
 end
 
-               
+for t = 1:T
+    C = [C, sum(chargerUse(:,t), 1) <= numChargers];
+end 
 
-%%%%%%%%%%
-% Constraints
-%%%%%%%%%%
+C = [C, powerCB == (solarPowToB + gridPowToB + mainPowToB)];
+
+C = [C, eB_min <= eB <= eB_max];
+
+for t = 1:T
+    for b = 1:B
+            C = [C, 0 <= powerCB(b,t) <= pCB*chargerUse(b,t)]; 
+    end
+end
 
 %%% Power Availability 
 % Grid Constraints
@@ -172,7 +187,7 @@ C = [C, powerCM == (solarPowToM + gridPowToM)];
 C = [C, powerDM ==  sum(mainPowToB,1)];
 
 for t = 1:(T-1)
-    C = [C, eM(t+1) == eM(t) + dt*(eff_CM*powerCM(t) - (1/eff_DM)*powerDM(t))]; %#ok<AGROW>
+    C = [C, eM(t+1) == eM(t) + dt*(eff_CM*powerCM(t) - (1/eff_DM)*powerDM(t))]; 
 end
 
 C = [C, eM_min <= eM <= eM_max];
@@ -220,23 +235,12 @@ for b = 1:B
 end
 
 
-C = [C, powerCB == (solarPowToB + gridPowToB + mainPowToB)];
 
-C = [C, eB_min <= eB <= eB_max];
-
-for t = 1:T
-    for b = 1:B
-            C = [C, 0 <= powerCB(b,t) <= pCB*chargerUse(b,t)]; 
-    end
-end
 
 C = [C, eB(:,1) == eB_max*busLevel];
 C = [C, eB(:,T) == eB_max*busLevel];
 
-%%% Charging Constraints
-for t = 1:T
-    C = [C, sum(chargerUse(:,t), 1) <= numChargers];
-end 
+
 
 % Route Coverage Constraints
 for d = 1:D
@@ -255,13 +259,6 @@ for b = 1:B
     end
 end
 
-for b = 1:B
-    for d = 1:D
-        C = [C, sum(assignment(b,d,:)) <= 1];
-    end
-end
-
-
 
 % Non Negativity Constraints
 C = [C, mainPowToB >= 0];
@@ -279,8 +276,8 @@ cost = .25 * gridPowTotal * transpose(gridPowPrice);
 % Solve and Analyze %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Solve the modeled scenario
-ops = sdpsettings('verbose',1,'debug',1,'solver','gurobi');
-% ops = sdpsettings('verbose',1,'debug',1,'solver','gurobi', 'gurobi.Presolve', 2, 'gurobi.Threads', 10, 'showprogress', 1, 'gurobi.NodefileStart', 8, 'gurobi.MIPGap', 0.005, 'gurobi.MIPFocus', 3);
+% ops = sdpsettings('verbose',1,'debug',1,'solver','gurobi');
+ops = sdpsettings('verbose',1,'debug',1,'solver','gurobi', 'gurobi.Presolve', 2, 'showprogress', 1, 'gurobi.MIPGap', 0.05);
 diagnostics = optimize(C, cost, ops);
 isFeasible = ~diagnostics.problem;
 

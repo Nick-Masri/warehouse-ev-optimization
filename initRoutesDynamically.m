@@ -15,7 +15,7 @@ function [departure, arrival, eRoute, report] = initRoutesDynamically(routeNums,
 
 
 % Read in all the data
-routeData = readmatrix('allRoutes.xlsx','Range','B4:E286' );
+routeData = readmatrix('allRoutes.xlsx','Range','B2:E21' );
 
 % Determine the number of busses 
 numRoutes = size(routeNums,2);
@@ -46,7 +46,7 @@ for i = 1:numRoutes
     
     % Calculate energy of route
 %     kwhPerMile = 2;
-    kwhPerMile = 2; % top 10 occuring operators
+    kwhPerMile = .63; % top 10 occuring operators
     routeEnergy = distance * kwhPerMile;
     eRoute(i) = routeEnergy;
     

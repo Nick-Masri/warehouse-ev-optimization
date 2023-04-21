@@ -1,0 +1,14 @@
+chargerEff: 0.94
+chargerPower: 50
+ebMaxKwh: 68
+emChargeEff: 0.95
+emChargePower: 500
+emDischargeEff: 0.95
+emDischargePower: 500
+emMaxKwh: 500
+filename: baseline
+gridMaxPower: 100
+numBuses: 10
+numChargers: 5
+routes: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
+solarMaxPower: 50
